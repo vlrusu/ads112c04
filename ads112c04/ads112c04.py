@@ -1,7 +1,7 @@
 """Main module."""
 
 import time
-import SMBus
+import smbus
 from smbus import SMBus
 
 
@@ -17,6 +17,8 @@ ADS112C04_CMD_RDATA              =  0x10
 ADS112C04_CMD_RREG               =  0x20
 ADS112C04_CMD_WREG               =  0x40
 
+ADS112C04_FS = 32768
+ADS112C04_REFV = 2.048
 
 
 class ads112c04(object):
@@ -38,14 +40,26 @@ class ads112c04(object):
         return self._bus.read_byte_data(self._address, reg)
 
 
-    def _readdata(self):
-        retc = self._bus.read_i2c_block_data(address, ADS112C04_CMD_RDATA, 2)
+    def _reset(self):
+        self._bus.write_byte(self._address, ADS112C04_CMD_RESET)
+    
+    def _readrawdata(self):
+        retc = self._bus.read_i2c_block_data(self._address, ADS112C04_CMD_RDATA, 2)
         retval = retc[0]*256+retc[1]
         return retval
 
+    def _readdata(self):
+        val = self._readrawdata()
+        if val > ADS112C04_FS-1:
+            val = -ADS112C04_REFV+(val-ADS112C04_FS-1)*ADS112C04_REFV/ADS112C04_FS
+        else:
+            val = ADS112C04_REFV*val/ADS112C04_FS
+
+        return val
+
     
-    def _startconveersion(self):
-        self._bus.write_byte(address, ADS112C04_CMD_START)
+    def _startconversion(self):
+        self._bus.write_byte(self._address, ADS112C04_CMD_START)
 
     def _setIDAC(self, val):
         self._writereg(ADS112C04_ADDR_CR2, val & 0x7)
@@ -56,5 +70,24 @@ class ads112c04(object):
 
     def _setgain(self,val):
         cr0 = self._readreg(ADS112C04_ADDR_CR0)
-        gain = (val&0x7)<<3
-        self._writereg(ADS112C04_ADDR_CR0, 
+        cr0  |= (val&0x7)<<3
+        self._writereg(ADS112C04_ADDR_CR0, cr0)
+
+    def _setmux(self,val):
+        cr0 = self._readreg(ADS112C04_ADDR_CR0)
+        cr0  |= (val&0xF)<<4
+        self._writereg(ADS112C04_ADDR_CR0, cr0)
+
+    def _setIDAC2mux(self,val):
+        cr0 = self._readreg(ADS112C04_ADDR_CR3)
+        cr0  |= (val&0x7)<<2
+        self._writereg(ADS112C04_ADDR_CR3, cr0)
+    def _setIDAC1mux(self,val):
+        cr0 = self._readreg(ADS112C04_ADDR_CR3)
+        cr0  |= (val&0x7)<<5
+        self._writereg(ADS112C04_ADDR_CR3, cr0)
+
+
+
+
+        
